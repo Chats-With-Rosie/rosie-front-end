@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Recent Image</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+      }
+      .header {
+        background-color: #333;
+        color: #fff;
+        text-align: center;
+        padding: 1em;
+      }
+      .image-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: calc(100vh - 4em);
+      }
+      .image {
+        max-width: 100%;
+        max-height: 100%;
+      }
+      .button {
+        display: block;
+        margin: 0.5em auto;
+        padding: 0.5em 1em;
+        background-color: #333;
+        color: #fff;
+        border: none;
+        border-radius: 0.3em;
+        font-size: 1.2em;
+        cursor: pointer;
+      }
+      .button:hover {
+        background-color: #555;
+      }
+      input[type="file"] {
+        display: none;
+      }
+      .file-input-label {
+        display: inline-block;
+        margin: 0.5em auto;
+        padding: 0.5em 1em;
+        background-color: #333;
+        color: #fff;
+        border: none;
+        border-radius: 0.3em;
+        font-size: 1.2em;
+        cursor: pointer;
+      }
+      .file-input-label:hover {
+        background-color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Rosie's Creations</h1>
+    </div>
+    <div class="image-container">
+      {% if image_path %}
+      <img class="image" src="{{ image_path }}" alt="Recent Image">
+      {% else %}
+      <p>No recent image found.</p>
+      {% endif %}
+    </div>
+    <div style="text-align:center">
+      <h2>Upload Context For Rosie</h2>
+      <form method="post" enctype="multipart/form-data" action="http://localhost:5869/upload-context">
+        <label for="context_file" class="file-input-label">Choose Context File</label>
+        <input type="file" name="context_file" id="context_file">
+        <button type="submit" class="button">Upload Context</button>
+      </form>
+    </div>
+  </body>
+</html>
