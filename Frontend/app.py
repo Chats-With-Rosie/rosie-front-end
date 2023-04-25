@@ -1,33 +1,27 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template 
+import shutil
 import os
-import sqlite3
+import requests
+
+import os
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['DATABASE'] = 'database.db'
-app.config['SECRET_KEY'] = 'secretkey'
-
-def connect_db():
-    conn = sqlite3.connect(app.config['DATABASE'])
-    conn.execute('CREATE TABLE IF NOT EXISTS images (filename TEXT)')
-    conn.commit()
-    return conn
+app.config['UPLOAD_FOLDER'] = 'static/'
 
 def get_most_recent_image():
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT filename FROM images ORDER BY rowid DESC LIMIT 1')
-    result = cursor.fetchone()
-    if result is None:
-        return None
-    filename = result[0]
-    return os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if not os.path.exists(app.config['UPLOAD_FOLDER']):
+        os.makedirs(app.config['UPLOAD_FOLDER'])
 
-def save_image_to_db(filename):
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO images VALUES (?)', (filename,))
-    conn.commit()
+    files = os.listdir(app.config['UPLOAD_FOLDER'])
+    if not files:
+        return None
+
+    image_extensions = ['.jpg', '.jpeg', '.png', '.gif']
+    files = [f for f in files if os.path.isfile(os.path.join(app.config['UPLOAD_FOLDER'], f)) and any(ext in f.lower() for ext in image_extensions)]
+    if not files:
+        return None
+    return os.path.join(app.config['UPLOAD_FOLDER'], max(files, key=lambda f: os.path.getctime(os.path.join(app.config['UPLOAD_FOLDER'], f))))
+
 
 @app.route('/', methods=['GET'])
 def index():
@@ -36,22 +30,29 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    # check if the POST request has an image
-    if 'image' not in request.files:
-        return jsonify({'error': 'no image found'})
-    
-    # save the image to the uploads directory
-    image = request.files['image']
-    filename = image.filename
+    image_url = request.json.get('image_url')
+    print(image_url)
+
+    image_data = requests.get(image_url).content
+    filename = "image.jpg"  # Save the downloaded image as 'image.jpg'
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    image.save(filepath)
-    
-    # save the filename to the database
-    save_image_to_db(filename)
-    
-    # return the URL of the uploaded image
-    url = request.host_url + app.config['UPLOAD_FOLDER'] + '/' + filename
-    return jsonify({'url': url})
+
+    with open(filepath, 'wb') as output_file:
+        output_file.write(image_data)
+
+    response = requests.get(image_url, stream=True)
+
+    if response.status_code == 200:
+        with open(filepath, 'wb') as f:
+            response.raw.decode_content = True
+            shutil.copyfileobj(response.raw, f)
+
+        url = request.host_url + app.config['UPLOAD_FOLDER'] + '/' + filename
+        return jsonify({'url': url}), 200
+    else:
+        return jsonify({'error': 'failed to download image'}), 500
+
 
 if __name__ == '__main__':
-    app.run(debug=True, port=7069)
+    app.run(debug=True, port=5069)
+
