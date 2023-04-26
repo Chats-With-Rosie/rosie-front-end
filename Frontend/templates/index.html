@@ -1,81 +1,174 @@
 <!DOCTYPE html>
-<html>
-  <head>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
-    <title>Recent Image</title>
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        font-family: Arial, sans-serif;
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.rawgit.com/mattdiamond/Recorderjs/08e7abd9/dist/recorder.js"></script>
+    <script>
+        let audioRecorder;
+        let audioContext;
+
+        function sendAudioToServer(blob) {
+          let formData = new FormData();
+          formData.append("file", blob);
+      
+          $.ajax({
+              url: "/upload-audio-to-self",
+              type: "POST",
+              data: formData,
+              processData: false,
+              contentType: false,
+              success: function(response) {
+                  console.log("Audio sent to server.");
+              },
+              error: function(xhr, status, error) {
+                  console.error("Error sending audio to server.");
+              }
+          });
       }
-      .header {
-        background-color: #333;
-        color: #fff;
-        text-align: center;
-        padding: 1em;
-      }
-      .image-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: calc(100vh - 4em);
-      }
-      .image {
-        max-width: 100%;
-        max-height: 100%;
-      }
-      .button {
-        display: block;
-        margin: 0.5em auto;
-        padding: 0.5em 1em;
-        background-color: #333;
-        color: #fff;
-        border: none;
-        border-radius: 0.3em;
-        font-size: 1.2em;
-        cursor: pointer;
-      }
-      .button:hover {
-        background-color: #555;
-      }
-      input[type="file"] {
-        display: none;
-      }
-      .file-input-label {
-        display: inline-block;
-        margin: 0.5em auto;
-        padding: 0.5em 1em;
-        background-color: #333;
-        color: #fff;
-        border: none;
-        border-radius: 0.3em;
-        font-size: 1.2em;
-        cursor: pointer;
-      }
-      .file-input-label:hover {
-        background-color: #555;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="header">
-      <h1>Rosie's Creations</h1>
-    </div>
-    <div class="image-container">
-      {% if image_path %}
-      <img class="image" src="{{ image_path }}" alt="Recent Image">
-      {% else %}
-      <p>No recent image found.</p>
-      {% endif %}
-    </div>
-    <div style="text-align:center">
-      <h2>Upload Context For Rosie</h2>
-      <form method="post" enctype="multipart/form-data" action="http://localhost:5869/upload-context">
-        <label for="context_file" class="file-input-label">Choose Context File</label>
-        <input type="file" name="context_file" id="context_file">
-        <button type="submit" class="button">Upload Context</button>
-      </form>
-    </div>
+      
+
+        function initAudioRecorder() {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+                audioContext = new AudioContext();
+                let input = audioContext.createMediaStreamSource(stream);
+                audioRecorder = new Recorder(input);
+            });
+        }
+
+        function checkForUpdatedImage() {
+            const imageElement = $("#image-display");
+            const imagePath = "static/uploads/image_to_display.jpg";
+            let previousImageTimestamp = null;
+
+            setInterval(function() {
+                $.get(imagePath + "?" + new Date().getTime(), function() {
+                    let currentImageTimestamp = new Date().getTime();
+
+                    if (previousImageTimestamp === null || currentImageTimestamp > previousImageTimestamp) {
+                        previousImageTimestamp = currentImageTimestamp;
+                        imageElement.attr("src", imagePath + "?" + currentImageTimestamp);
+                    }
+                }).fail(function() {
+                    console.log("Image not found.");
+                });
+            }, 1000);
+        }
+
+        let isPlaying = false;
+        let previousAudioTimestamp = null;
+        
+        function playAudio(audioUrl) {
+          if (isPlaying) {
+            return;
+          }
+        
+          let audio = new Audio(audioUrl);
+          isPlaying = true;
+        
+          audio.addEventListener('ended', function() {
+            console.log("Audio finished playing");
+            isPlaying = false;
+            previousAudioTimestamp = new Date().getTime();
+          });
+        
+          console.log("Playing audio");
+          audio.play();
+        }
+        
+        function checkForUpdatedAudio() {
+            const audioPath = "static/uploads/speak.wav";
+            let previousAudioTimestamp = null;
+        
+            setInterval(function() {
+                $.get("/get-audio-timestamp", function(data) {
+                    let currentAudioTimestamp = data.timestamp;
+        
+                    if (!isPlaying && (previousAudioTimestamp === null || currentAudioTimestamp > previousAudioTimestamp)) {
+                        previousAudioTimestamp = currentAudioTimestamp;
+                        playAudio(audioPath + "?" + currentAudioTimestamp);
+                    }
+                }).fail(function() {
+                    console.log("Audio not found.");
+                });
+            }, 1000);
+        }
+        
+    
+
+        function uploadTextFile(textFile) {
+            let formData = new FormData();
+            formData.append("text", textFile);
+
+            $.ajax({
+                url: "/upload-context",
+                type: "POST",
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    alert("Text file sent to server.");
+                },
+                error: function(xhr, status, error) {
+                    alert("Error sending text file to server.");
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            initAudioRecorder();
+            checkForUpdatedImage();
+            checkForUpdatedAudio();
+
+            $("#record-audio").on("click", function() {
+                if (!audioRecorder) {
+                    alert("Audio recording is not initialized.");
+                    return;
+                }
+
+                if ($(this).hasClass("recording")) {
+                audioRecorder.stop();
+                audioRecorder.exportWAV(sendAudioToServer);
+                $(this).removeClass("recording");
+                $(this).text("Start Recording");
+                } else {
+                audioRecorder.clear();
+                audioRecorder.record();
+                $(this).addClass("recording");
+                $(this).text("Stop Recording");
+                }
+                });
+                $("#upload-text-file").on("click", function() {
+                  let textFile = $("#text-file")[0].files[0];
+      
+                  if (textFile) {
+                      uploadTextFile(textFile);
+                  } else {
+                      alert("Please select a text file.");
+                  }
+              });
+          });
+      </script>
+    </head>
+    <body>
+      <div>
+          <h2>Chat with Rosie</h2>
+          <img id="image-display" src="" alt="Image not available" />
+      </div>
+      <div>
+          <h2>Talk to Rosie</h2>
+          <p>Click the button below and speak to Rosie. She's always ready to listen!</p>
+          <button id="record-audio">Start Recording</button>
+      </div>
+      <div>
+          <h2>What's on your mind?</h2>
+          <p>Share your thoughts with Rosie. Upload a text file below and she'll respond!</p>
+          <input type="file" id="text-file" accept=".txt" />
+          <button id="upload-text-file">Share with Rosie</button>
+      </div>
   </body>
-</html>
+    </body>
+    </html>
