@@ -1,9 +1,37 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <title>Chat with Rosie</title>
     <meta charset="UTF-8">
-    <title>Recent Image</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+        text-align: center;
+      }
+      h1 {
+        font-size: 3em;
+        margin-top: 1em;
+        margin-bottom: 0;
+      }
+      button {
+        font-size: 2em;
+        margin-top: 1em;
+        padding: 0.5em 1em;
+        border-radius: 0.5em;
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #0062cc;
+      }
+      .recording {
+        background-color: red;
+      }
       body {
         margin: 0;
         padding: 0;
@@ -59,6 +87,97 @@
     </style>
   </head>
   <body>
+
+      
+    <h1>Chat with Rosie</h1>
+    
+    <button id="record-btn">🎤</button>
+    
+    <div style="text-align: center; margin-top: 1em;">
+	<p>Tap to record a message for Rosie</p>
+	<p>tap again to end the call</p>
+	<p>max 30s</p>
+    </div>
+
+    <script>
+      const recordBtn = document.getElementById('record-btn');
+      const audioChunks = [];
+      let mediaRecorder;
+      let mediaSource;
+      let sourceBuffer;
+      let uniqueId;
+      let isRecording = false;
+
+      recordBtn.addEventListener('click', () => {
+        toggleRecording();
+      });
+
+      function toggleRecording() {
+        if (isRecording) {
+          stopRecording();
+          isRecording = false;
+          recordBtn.innerHTML = '🎤';
+        } else {
+          startRecording();
+          isRecording = true;
+          recordBtn.innerHTML = '⏹️';
+        }
+      }
+
+      function startRecording() {
+        audioChunks.length = 0;
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(stream => {
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.start();
+
+            mediaRecorder.addEventListener('dataavailable', event => {
+              audioChunks.push(event.data);
+              if (!mediaSource || mediaSource.readyState !== 'open') return;
+              sourceBuffer.appendBuffer(event.data);
+            });
+
+            mediaRecorder.addEventListener('stop', async () => {
+              const audioBlob = new Blob(audioChunks);
+              const formData = new FormData();
+              formData.append('audio', audioBlob, 'audio.wav');
+              formData.append('uniqueId', uniqueId);
+
+              const response = await fetch('http://127.0.0.1:8081/upload', {
+                method: 'POST',
+                body: formData
+              });
+
+              if (response.ok) {
+                console.log('File chunk was saved successfully!');
+              } else {
+                console.error('Error saving file chunk:', response.status);
+              }
+
+              audioChunks.length = 0;
+              mediaSource.endOfStream();
+              startRecording();
+            });
+
+            mediaSource = new MediaSource();
+            mediaSource.addEventListener('sourceopen', () => {
+              sourceBuffer = mediaSource.addSourceBuffer('audio/wav');
+              uniqueId = Date.now().toString();
+              sourceBuffer.appendBuffer(new Uint8Array([uniqueId]));
+            });
+          })
+          .catch(console.error);
+      }
+
+      function stopRecording() {
+        mediaRecorder.stop();
+      }
+    </script>
+
+
+
+
+
     <div class="header">
       <h1>Rosie's Creations</h1>
     </div>
@@ -79,3 +198,7 @@
     </div>
   </body>
 </html>
+
+  
+
+
