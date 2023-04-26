@@ -98,8 +98,33 @@
 	<p>tap again to end the call</p>
 	<p>max 30s</p>
     </div>
-
+    
+    <audio id="audioPlayer" controls autoplay>
+      <source id="audioSource" src="static/uploads/speak.wav" type="audio/wav">
+      Your browser does not support the audio element.
+    </audio>
     <script>
+      // Create a function to update the audio player source
+      function updateAudioSource(filePath) {
+        var audioSource = document.getElementById('audioSource');
+        var audioPlayer = document.getElementById('audioPlayer');
+        audioSource.src = filePath;
+        audioPlayer.load();
+        audioPlayer.play();
+      }
+    
+      // Call the updateAudioSource function when the file is modified
+      var eventSource = new EventSource('/watchdog'); // Assumes that you've set up a Flask route that uses Flask-SSE to stream updates from the server to the client
+      eventSource.onmessage = function(event) {
+        if (event.data === 'modified') {
+          updateAudioSource('static/uploads/speak.wav'); // Update the file path with the path of the updated file
+        }
+      };
+    </script>
+    
+    <script>
+      
+      
       const recordBtn = document.getElementById('record-btn');
       const audioChunks = [];
       let mediaRecorder;
