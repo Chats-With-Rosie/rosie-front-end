@@ -66,8 +66,13 @@
             return;
           }
         
+          // Add a cache-busting query string to the audio URL
+          audioUrl += (audioUrl.indexOf('?') === -1 ? '?' : '&') + 'cb=' + new Date().getTime();
+        
           let audio = new Audio(audioUrl);
           isPlaying = true;
+        
+          console.log("Playing audio:", audioUrl);
         
           audio.addEventListener('ended', function() {
             console.log("Audio finished playing");
@@ -75,30 +80,35 @@
             previousAudioTimestamp = new Date().getTime();
           });
         
-          console.log("Playing audio");
+          audio.addEventListener('error', function(e) {
+            console.error('Audio error:', e);
+          });
+        
           audio.play();
         }
         
-        function checkForUpdatedAudio() {
-            const audioPath = "static/uploads/speak.wav";
-            let previousAudioTimestamp = null;
         
-            setInterval(function() {
-                $.get("/get-audio-timestamp", function(data) {
-                    let currentAudioTimestamp = data.timestamp;
+        async function checkForUpdatedAudio() {
+          const audioPath = "static/uploads/speak.wav";
         
-                    if (!isPlaying && (previousAudioTimestamp === null || currentAudioTimestamp > previousAudioTimestamp)) {
-                        previousAudioTimestamp = currentAudioTimestamp;
-                        playAudio(audioPath + "?" + currentAudioTimestamp);
-                    }
-                }).fail(function() {
-                    console.log("Audio not found.");
-                });
-            }, 1000);
+          while (true) {
+            try {
+              const response = await fetch("/get-audio-timestamp");
+              const data = await response.json();
+              let currentAudioTimestamp = data.timestamp;
+        
+              if (!isPlaying && (previousAudioTimestamp === null || currentAudioTimestamp > previousAudioTimestamp)) {
+                previousAudioTimestamp = currentAudioTimestamp;
+              }
+            } catch (error) {
+              console.log("Audio not found.");
+            }
+        
+            // You can adjust the delay between requests as needed (in milliseconds)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
         }
         
-    
-
         function uploadTextFile(textFile) {
             let formData = new FormData();
             formData.append("text", textFile);
@@ -150,25 +160,35 @@
                       alert("Please select a text file.");
                   }
               });
+              $("#play-audio").on("click", function() {
+                if (previousAudioTimestamp) {
+                    const audioPath = "static/uploads/speak.wav";
+                    playAudio(audioPath + "?" + previousAudioTimestamp);
+                } else {
+                    alert("No audio available to play.");
+                }
+            });
           });
+            
       </script>
     </head>
     <body>
-      <div>
-          <h2>Chat with Rosie</h2>
-          <img id="image-display" src="" alt="Image not available" />
+        <div>
+            <h2>Image Display</h2>
+            <img id="image-display" src="" alt="Image not available" />
+        </div>
+        <div>
+            <h2>Audio Recorder</h2>
+            <button id="record-audio">Start Recording</button>
+        </div>
+        <div>
+          <h2>Play Audio</h2>
+          <button id="play-audio">Play Audio</button>
       </div>
-      <div>
-          <h2>Talk to Rosie</h2>
-          <p>Click the button below and speak to Rosie. She's always ready to listen!</p>
-          <button id="record-audio">Start Recording</button>
-      </div>
-      <div>
-          <h2>What's on your mind?</h2>
-          <p>Share your thoughts with Rosie. Upload a text file below and she'll respond!</p>
-          <input type="file" id="text-file" accept=".txt" />
-          <button id="upload-text-file">Share with Rosie</button>
-      </div>
-  </body>
+        <div>
+            <h2>Upload Text File</h2>
+            <input type="file" id="text-file" accept=".txt" />
+            <button id="upload-text-file">Upload Text File</button>
+        </div>
     </body>
     </html>
