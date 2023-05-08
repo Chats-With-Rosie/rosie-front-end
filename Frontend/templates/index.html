@@ -1,81 +1,194 @@
 <!DOCTYPE html>
-<html>
-  <head>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
-    <title>Recent Image</title>
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        font-family: Arial, sans-serif;
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.rawgit.com/mattdiamond/Recorderjs/08e7abd9/dist/recorder.js"></script>
+    <script>
+        let audioRecorder;
+        let audioContext;
+
+        function sendAudioToServer(blob) {
+          let formData = new FormData();
+          formData.append("file", blob);
+      
+          $.ajax({
+              url: "/upload-audio-to-self",
+              type: "POST",
+              data: formData,
+              processData: false,
+              contentType: false,
+              success: function(response) {
+                  console.log("Audio sent to server.");
+              },
+              error: function(xhr, status, error) {
+                  console.error("Error sending audio to server.");
+              }
+          });
       }
-      .header {
-        background-color: #333;
-        color: #fff;
-        text-align: center;
-        padding: 1em;
-      }
-      .image-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: calc(100vh - 4em);
-      }
-      .image {
-        max-width: 100%;
-        max-height: 100%;
-      }
-      .button {
-        display: block;
-        margin: 0.5em auto;
-        padding: 0.5em 1em;
-        background-color: #333;
-        color: #fff;
-        border: none;
-        border-radius: 0.3em;
-        font-size: 1.2em;
-        cursor: pointer;
-      }
-      .button:hover {
-        background-color: #555;
-      }
-      input[type="file"] {
-        display: none;
-      }
-      .file-input-label {
-        display: inline-block;
-        margin: 0.5em auto;
-        padding: 0.5em 1em;
-        background-color: #333;
-        color: #fff;
-        border: none;
-        border-radius: 0.3em;
-        font-size: 1.2em;
-        cursor: pointer;
-      }
-      .file-input-label:hover {
-        background-color: #555;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="header">
-      <h1>Rosie's Creations</h1>
-    </div>
-    <div class="image-container">
-      {% if image_path %}
-      <img class="image" src="{{ image_path }}" alt="Recent Image">
-      {% else %}
-      <p>No recent image found.</p>
-      {% endif %}
-    </div>
-    <div style="text-align:center">
-      <h2>Upload Context For Rosie</h2>
-      <form method="post" enctype="multipart/form-data" action="http://localhost:5869/upload-context">
-        <label for="context_file" class="file-input-label">Choose Context File</label>
-        <input type="file" name="context_file" id="context_file">
-        <button type="submit" class="button">Upload Context</button>
-      </form>
-    </div>
-  </body>
-</html>
+      
+
+        function initAudioRecorder() {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+                audioContext = new AudioContext();
+                let input = audioContext.createMediaStreamSource(stream);
+                audioRecorder = new Recorder(input);
+            });
+        }
+
+        function checkForUpdatedImage() {
+            const imageElement = $("#image-display");
+            const imagePath = "static/uploads/image_to_display.jpg";
+            let previousImageTimestamp = null;
+
+            setInterval(function() {
+                $.get(imagePath + "?" + new Date().getTime(), function() {
+                    let currentImageTimestamp = new Date().getTime();
+
+                    if (previousImageTimestamp === null || currentImageTimestamp > previousImageTimestamp) {
+                        previousImageTimestamp = currentImageTimestamp;
+                        imageElement.attr("src", imagePath + "?" + currentImageTimestamp);
+                    }
+                }).fail(function() {
+                    console.log("Image not found.");
+                });
+            }, 1000);
+        }
+
+        let isPlaying = false;
+        let previousAudioTimestamp = null;
+        
+        function playAudio(audioUrl) {
+          if (isPlaying) {
+            return;
+          }
+        
+          // Add a cache-busting query string to the audio URL
+          audioUrl += (audioUrl.indexOf('?') === -1 ? '?' : '&') + 'cb=' + new Date().getTime();
+        
+          let audio = new Audio(audioUrl);
+          isPlaying = true;
+        
+          console.log("Playing audio:", audioUrl);
+        
+          audio.addEventListener('ended', function() {
+            console.log("Audio finished playing");
+            isPlaying = false;
+            previousAudioTimestamp = new Date().getTime();
+          });
+        
+          audio.addEventListener('error', function(e) {
+            console.error('Audio error:', e);
+          });
+        
+          audio.play();
+        }
+        
+        
+        async function checkForUpdatedAudio() {
+          const audioPath = "static/uploads/speak.wav";
+        
+          while (true) {
+            try {
+              const response = await fetch("/get-audio-timestamp");
+              const data = await response.json();
+              let currentAudioTimestamp = data.timestamp;
+        
+              if (!isPlaying && (previousAudioTimestamp === null || currentAudioTimestamp > previousAudioTimestamp)) {
+                previousAudioTimestamp = currentAudioTimestamp;
+              }
+            } catch (error) {
+              console.log("Audio not found.");
+            }
+        
+            // You can adjust the delay between requests as needed (in milliseconds)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+        
+        function uploadTextFile(textFile) {
+            let formData = new FormData();
+            formData.append("text", textFile);
+
+            $.ajax({
+                url: "/upload-context",
+                type: "POST",
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    alert("Text file sent to server.");
+                },
+                error: function(xhr, status, error) {
+                    alert("Error sending text file to server.");
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            initAudioRecorder();
+            checkForUpdatedImage();
+            checkForUpdatedAudio();
+
+            $("#record-audio").on("click", function() {
+                if (!audioRecorder) {
+                    alert("Audio recording is not initialized.");
+                    return;
+                }
+
+                if ($(this).hasClass("recording")) {
+                audioRecorder.stop();
+                audioRecorder.exportWAV(sendAudioToServer);
+                $(this).removeClass("recording");
+                $(this).text("Start Recording");
+                } else {
+                audioRecorder.clear();
+                audioRecorder.record();
+                $(this).addClass("recording");
+                $(this).text("Stop Recording");
+                }
+                });
+                $("#upload-text-file").on("click", function() {
+                  let textFile = $("#text-file")[0].files[0];
+      
+                  if (textFile) {
+                      uploadTextFile(textFile);
+                  } else {
+                      alert("Please select a text file.");
+                  }
+              });
+              $("#play-audio").on("click", function() {
+                if (previousAudioTimestamp) {
+                    const audioPath = "static/uploads/speak.wav";
+                    playAudio(audioPath + "?" + previousAudioTimestamp);
+                } else {
+                    alert("No audio available to play.");
+                }
+            });
+          });
+            
+      </script>
+    </head>
+    <body>
+        <div>
+            <h2>Image Display</h2>
+            <img id="image-display" src="" alt="Image not available" />
+        </div>
+        <div>
+            <h2>Audio Recorder</h2>
+            <button id="record-audio">Start Recording</button>
+        </div>
+        <div>
+          <h2>Play Audio</h2>
+          <button id="play-audio">Play Audio</button>
+      </div>
+        <div>
+            <h2>Upload Text File</h2>
+            <input type="file" id="text-file" accept=".txt" />
+            <button id="upload-text-file">Upload Text File</button>
+        </div>
+    </body>
+    </html>
